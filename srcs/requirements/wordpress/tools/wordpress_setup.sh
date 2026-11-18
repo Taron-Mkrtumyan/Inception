@@ -12,7 +12,7 @@ until mariadb-admin ping -h mariadb -u"${SQL_USER}" -p"${SQL_PASSWORD}" --silent
 done
 
 if [ ! -f /var/www/html/wp-config.php ]; then
-	wp core download	--allow-root
+	wp core download	--allow-root --force
 
 	wp config create	--allow-root \
 						--dbname=${SQL_DATABASE} \

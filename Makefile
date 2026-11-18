@@ -2,7 +2,7 @@ SHELL := /bin/sh
 
 COMPOSE_FILE := srcs/docker-compose.yml
 ENV_FILE := srcs/.env
-LOGIN ?= $(shell id -un)
+LOGIN := tmkrtumy
 DATA_DIR := /home/$(LOGIN)/data
 
 COMPOSE := LOGIN=$(LOGIN) docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
