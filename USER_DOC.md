@@ -4,20 +4,31 @@ This guide covers running and using the Inception WordPress stack.
 
 ## Before starting
 
-Install Docker Engine, Docker Compose v2, and Make. Run commands from the
-repository root.
+Install Docker Engine, Docker Compose v2, and Make inside the Linux VM.
+Run commands from the repository root in that VM.
 
-Review [`srcs/.env`](srcs/.env) before starting. In particular, change the
-database and WordPress passwords if this installation is accessible by other
-people.
+On a new clone, create `srcs/.env` from the tracked template if the local
+file does not already exist:
+
+```bash
+cp srcs/.env.example srcs/.env
+```
+
+Fill in all four password values in `srcs/.env` before starting. The local
+file is ignored by Git; keep passwords out of the tracked
+[`srcs/.env.example`](srcs/.env.example).
 
 The Compose file uses `${LOGIN}` to locate persistent storage. The Makefile
-sets it to the current system username automatically. To use another home
-directory, pass it explicitly:
+defaults it to `tmkrtumy`. To use another home directory, pass the desired
+login on each Make invocation:
 
 ```bash
 make LOGIN=your-login
 ```
+
+The supplied domain is `tmkrtumy.42.fr`; configure it to resolve to your VM.
+Changing `LOGIN` changes storage paths only. See the README configuration
+section before changing the domain.
 
 ## Starting the website
 
@@ -86,8 +97,9 @@ The website and database data are kept on the host at:
 These directories are created by `make`, `make up`, and `make build`.
 Removing containers does not remove these directories.
 
-`make fclean` removes the Compose project's containers, images, Docker
-volumes, and orphan containers. Back up the host data before performing
+`make fclean` removes the Compose project's containers, network, service
+images, Docker volumes, and orphan containers. It keeps the host data
+directories and Docker build cache. Back up the host data before performing
 maintenance or deleting it manually.
 
 ## Troubleshooting
@@ -107,13 +119,19 @@ make logs
 For a single service, use Docker Compose directly:
 
 ```bash
-LOGIN="$(id -un)" docker compose \
+LOGIN=tmkrtumy docker compose \
   --env-file srcs/.env \
   -f srcs/docker-compose.yml \
   logs nginx
 ```
 
-Replace `nginx` with `wordpress` or `mariadb` as needed.
+Replace `nginx` with `wordpress` or `mariadb` as needed. If you overrode
+`LOGIN` when starting the stack, use that same value here.
+
+Nginx access logs and errors at warning level or higher are included.
+Docker automatically rotates captured logs for each service, retaining up
+to three files of about 10 MB each before compression. Older logs are
+removed as the limit is reached.
 
 ### Rebuild images
 
@@ -128,7 +146,10 @@ For a clean image rebuild:
 
 ```bash
 make re
+make up
 ```
+
+`make re` rebuilds the images but does not start containers.
 
 ### Port 443 is already in use
 

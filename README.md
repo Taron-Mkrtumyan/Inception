@@ -14,16 +14,18 @@ Dockerfile and run every service in its own container:
 - **MariaDB** provides the WordPress database and is reachable only through
   the private Docker network.
 
-The project sources are organised as follows:
+After local configuration, the project layout is:
 
 ```text
 .
+├── .gitignore
 ├── Makefile
 ├── README.md
 ├── USER_DOC.md
 ├── DEV_DOC.md
 └── srcs
-    ├── .env
+    ├── .env.example
+    ├── .env              # Local configuration, ignored by Git
     ├── docker-compose.yml
     └── requirements
         ├── mariadb
@@ -65,10 +67,11 @@ services with independent lifecycles, not complete operating systems.
 Environment variables are convenient for non-sensitive configuration such as
 the domain name, site title, and service names. They are also visible through
 container metadata and should not be treated as a secure secret store.
-Docker secrets are preferable for production passwords because they are
-provided as files with controlled access. This project uses the required
-[`srcs/.env`](srcs/.env) file for local configuration; replace its example
-credentials and keep real credentials out of version control.
+Docker secrets provide an alternative in which passwords are read from files
+mounted into containers. This project uses a local `srcs/.env` file, ignored
+by Git, to pass configuration and passwords through environment variables.
+The tracked [`srcs/.env.example`](srcs/.env.example) contains the variable
+names and non-sensitive defaults, with all password values left empty.
 
 ### Docker network versus host network
 
@@ -86,10 +89,10 @@ Bind mounts directly expose a chosen host directory and are useful when a
 host path must be controlled explicitly, but they have weaker portability and
 permission isolation.
 
-This project declares named volumes for the database and WordPress files and
-configures their host-side storage under `/home/<login>/data`. Verify the
-volume driver configuration during evaluation because the subject requires
-named volumes and does not allow bind mounts for these persistent stores.
+This project declares named volumes for the database and WordPress files.
+The local volume driver uses `type: none` and `o: bind` to mount the specified
+host directories under `/home/<login>/data`. Removing these Docker volume
+definitions does not delete the files in those host directories.
 
 ## Instructions
 
@@ -104,24 +107,37 @@ named volumes and does not allow bind mounts for these persistent stores.
 
 ### Configuration
 
-Review [`srcs/.env`](srcs/.env) before starting. It contains:
+On a new clone, create the local configuration from the tracked template
+when `srcs/.env` does not already exist:
+
+```bash
+cp srcs/.env.example srcs/.env
+```
+
+Edit `srcs/.env` and fill in all four password values before starting. It
+contains:
 
 - `DOMAIN_NAME` and the WordPress site title
 - MariaDB database and application-user settings
 - WordPress administrator and author settings
 
 The administrator username must not contain `admin` or `administrator`, as
-required by the subject. The example uses `iamtheowner`. Do not publish real
-passwords, API keys, or certificates in the repository. For a deployment
-requiring stronger protection, use Docker secrets and update the service
-configuration accordingly.
+required by the subject. The example uses `iamtheowner`. Keep `srcs/.env`
+local; commit only the template with empty password values. Do not publish
+passwords, API keys, or private keys in the repository.
 
-The Makefile defaults `LOGIN` to the current system username. Override it when
-necessary:
+The Makefile defaults `LOGIN` to `tmkrtumy`. Override it on each Make
+invocation when using another storage directory:
 
 ```bash
 make LOGIN=someuser
 ```
+
+`LOGIN` controls the storage paths only. If you change the website domain,
+also update `DOMAIN_NAME` in `srcs/.env`, `server_name` in
+`srcs/requirements/nginx/nginx.conf`, and the certificate subject in
+`srcs/requirements/nginx/tools/nginx_setup.sh`, then rebuild and recreate
+the stack. Configure the domain to resolve to your VM.
 
 ### Build and start
 
@@ -162,17 +178,38 @@ Use the administrator credentials from the local `.env` configuration.
 | `make start` | Start existing containers |
 | `make stop` | Stop running containers |
 | `make restart` | Recreate the stack |
-| `make down` | Stop and remove containers |
+| `make down` | Stop and remove containers and the project network |
 | `make logs` | Follow logs from all services |
 | `make ps` | Show service status |
 | `make config` | Render and validate Compose configuration |
-| `make clean` | Stop and remove containers |
-| `make fclean` | Remove containers, images, volumes, and orphans |
-| `make re` | Remove resources and rebuild images |
+| `make clean` | Same as `make down` |
+| `make fclean` | Remove containers, project network, service images, volumes, and project orphan containers |
+| `make re` | Run `fclean` and rebuild images; use `make up` afterward to start services |
 
-`make fclean` removes Docker resources associated with this Compose project.
-It does not delete the host data directories. Back up persistent data before
-performing maintenance.
+`make fclean` removes the listed resources associated with this Compose
+project. It keeps the host data directories and does not clear Docker build
+cache. Back up persistent data before performing maintenance.
+
+### Logging
+
+All three services use Docker's `local` logging driver with `max-size: "10m"`
+and `max-file: "3"`. Docker rotates captured logs and removes the oldest
+files as needed, retaining roughly 30 MB per container before compression.
+Nginx sends access logs to standard output and error logs at warning level
+or higher to standard error, making them available through `make logs`.
+This rotation applies to standard output and standard error captured by
+Docker; it does not rotate separate application log files.
+
+After changing Compose logging settings, recreate the containers. For the
+Nginx configuration copied into its image, rebuild the image as well:
+
+```bash
+make build
+make down
+make up
+```
+
+The website and database files remain in the host data directories.
 
 ### Troubleshooting
 
@@ -201,6 +238,7 @@ The container continues to listen on port 443.
 - [Dockerfile reference](https://docs.docker.com/reference/dockerfile/)
 - [Docker volumes documentation](https://docs.docker.com/engine/storage/volumes/)
 - [Docker networking documentation](https://docs.docker.com/engine/network/)
+- [Docker local logging driver](https://docs.docker.com/engine/logging/drivers/local/)
 - [Nginx documentation](https://nginx.org/en/docs/)
 - [PHP-FPM documentation](https://www.php.net/manual/en/install.fpm.php)
 - [MariaDB documentation](https://mariadb.com/kb/en/documentation/)
@@ -214,6 +252,8 @@ understanding or verification. It was used for:
 
 - reviewing the Docker Compose service relationships, health checks, and
   volume declarations;
+- preparing the ignored local environment configuration and tracked template;
+- configuring Nginx log forwarding and Docker log rotation;
 - identifying Dockerfile path mismatches and package-version compatibility
   issues;
 - checking shell-script and Nginx configuration syntax;
