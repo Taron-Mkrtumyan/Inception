@@ -44,7 +44,7 @@ config:
 
 clean: down
 
-fclean: down
+fclean:
 	$(COMPOSE) down --rmi all --volumes --remove-orphans
 
 re: fclean build
